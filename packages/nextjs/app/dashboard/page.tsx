@@ -52,7 +52,7 @@ export default function DashboardPage() {
         <div className="glass-panel rounded-xl p-6 md:col-span-1">
           <span className="label-caps block mb-3">Pending Earnings</span>
           <div className="font-manrope text-4xl font-black text-white mb-4">
-            {formatUnits(balance, 6)} <span className="text-xl text-on-surface-variant">ETH</span>
+            {formatUnits(balance, 6)} <span className="text-xl text-on-surface-variant">USDC</span>
           </div>
           {balance > 0n ? (
             <button
