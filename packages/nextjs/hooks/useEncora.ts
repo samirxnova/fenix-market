@@ -160,7 +160,7 @@ export function useEncora() {
         account: address,
         ...gas,
       });
-      sealedHandles = result as readonly bigint[];
+      sealedHandles = (result as unknown) as readonly bigint[];
     } catch (err) {
       console.error("simulateContract failed:", err);
       throw err;
