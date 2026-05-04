@@ -1,0 +1,15 @@
+{
+  "name": "encora",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "npm run dev --workspace=packages/nextjs",
+    "build": "npm run compile --workspace=packages/hardhat && npm run build --workspace=packages/nextjs",
+    "test": "npm run test --workspace=packages/hardhat",
+    "deploy": "npm run deploy --workspace=packages/hardhat",
+    "compile": "npm run compile --workspace=packages/hardhat"
+  },
+  "overrides": {
+    "viem": "2.48.8"
+  }
+}
