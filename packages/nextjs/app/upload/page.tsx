@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useEncora } from "@/hooks/useEncora";
 import { useCofheConnected } from "@/hooks/useCofhe";
+import { DragDropZone } from "@/components/DragDropZone";
 import toast from "react-hot-toast";
 
 const CATEGORIES = ["diet", "fitness", "skills", "finance", "code", "health", "other"];
@@ -128,8 +129,11 @@ export default function UploadPage() {
             </div>
           </Field>
           <Field label="Full Content (markdown — will be FHE-encrypted)">
+            <DragDropZone onContent={(text, name) => {
+              setForm(f => ({ ...f, fullContent: text, title: f.title || name.replace(/\.(md|txt)$/, "") }));
+            }} />
             <textarea
-              className="input-field h-64 resize-none font-mono text-sm"
+              className="input-field h-64 resize-none font-mono text-sm mt-3"
               value={form.fullContent}
               onChange={set("fullContent")}
               placeholder={"# Your full content here\n\nOnly buyers who pay will ever see this..."}

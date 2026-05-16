@@ -1,22 +1,21 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   webpack: (config) => {
-    config.resolve.fallback = {
-      fs: false,
-      net: false,
-      tls: false,
-      "pino-pretty": false,
-      "@react-native-async-storage/async-storage": false,
-      bs58: false,
-      encoding: false,
-    };
-    // Stub the entire coinbase CDP chain — we don't use it
+    config.externals.push("pino-pretty", "lokijs", "encoding");
     config.resolve.alias = {
       ...config.resolve.alias,
+      "@react-native-async-storage/async-storage": false,
       "@coinbase/cdp-sdk": false,
       "@base-org/account": false,
     };
-    config.ignoreWarnings = [/Circular dependency/];
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      net: false,
+      tls: false,
+      bs58: false,
+    };
+    config.module.exprContextCritical = false;
     return config;
   },
 };

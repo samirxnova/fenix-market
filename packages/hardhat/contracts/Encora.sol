@@ -31,9 +31,9 @@ contract Encora is ReentrancyGuard {
         string title;
         string description;
         string previewText;        // Public excerpt — used by AI chat
-        bytes encryptedContent;    // AES-GCM ciphertext: iv (12 bytes) ++ ciphertext
+        string encryptedContentCID; // IPFS CID of AES-encrypted content
         euint32[] encryptedSymKey; // FHE-encrypted AES key: 8 × euint32 chunks
-        uint256 price;             // Price in wei
+        uint256 price;             // Price in USDC (6 decimals)
         bool active;
         uint256 createdAt;
         string category;
@@ -45,7 +45,7 @@ contract Encora is ReentrancyGuard {
         string title;
         string description;
         string previewText;
-        bytes encryptedContent;
+        string encryptedContentCID;
         uint256 price;
         bool active;
         uint256 createdAt;
@@ -102,7 +102,7 @@ contract Encora is ReentrancyGuard {
         string calldata title,
         string calldata description,
         string calldata previewText,
-        bytes calldata encryptedContent,
+        string calldata encryptedContentCID,
         InEuint32[] calldata encSymKeyChunks,
         string calldata category,
         uint256 price
@@ -116,7 +116,7 @@ contract Encora is ReentrancyGuard {
         c.title = title;
         c.description = description;
         c.previewText = previewText;
-        c.encryptedContent = encryptedContent;
+        c.encryptedContentCID = encryptedContentCID;
         c.price = price;
         c.active = true;
         c.createdAt = block.timestamp;
@@ -246,7 +246,7 @@ contract Encora is ReentrancyGuard {
             title: c.title,
             description: c.description,
             previewText: c.previewText,
-            encryptedContent: c.encryptedContent,
+            encryptedContentCID: c.encryptedContentCID,
             price: c.price,
             active: c.active,
             createdAt: c.createdAt,

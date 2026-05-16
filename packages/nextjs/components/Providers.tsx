@@ -10,7 +10,7 @@ import "@rainbow-me/rainbowkit/styles.css";
 const queryClient = new QueryClient();
 
 function CofheInit() {
-  useCofhe(); // initializes cofhejs when wallet connects
+  useCofhe();
   return null;
 }
 

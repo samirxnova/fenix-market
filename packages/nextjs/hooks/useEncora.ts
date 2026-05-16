@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import { usePublicClient, useWalletClient, useAccount } from "wagmi";
-import { parseUnits, toHex, hexToBytes } from "viem";
+import { parseUnits } from "viem";
 import { ENCORA_ABI, ERC20_ABI, CONTRACT_ADDRESS, USDC_ADDRESS, ContentInfo } from "@/src/contracts/encora";
 import { generateSymKey, encryptText, decryptText, exportKey, importKey, keyToUint32Chunks, uint32ChunksToKey } from "@/utils/crypto";
 import { encryptKeyChunks } from "@/utils/fheEncrypt";
@@ -82,12 +82,26 @@ export function useEncora() {
   }) => {
     if (!walletClient || !address) throw new Error("Wallet not connected");
 
+    // 1. AES-encrypt the full text
     const symKey = await generateSymKey();
     const encryptedContent = await encryptText(params.fullContent, symKey);
+
+    // 2. Upload encrypted bytes to Pinata IPFS
+    const blob = new Blob([encryptedContent]);
+    const file = new File([blob], `encora-${Date.now()}.enc`, { type: "application/octet-stream" });
+    const urlRes = await fetch("/api/upload-url");
+    const { url: presignedUrl } = await urlRes.json();
+    const { PinataSDK } = await import("pinata");
+    const pinataSdk = new PinataSDK({ pinataJwt: "", pinataGateway: process.env.NEXT_PUBLIC_PINATA_GATEWAY || "" });
+    const ipfsUpload = await pinataSdk.upload.public.file(file).url(presignedUrl);
+    const encryptedContentCID = ipfsUpload.cid;
+
+    // 3. FHE-encrypt the AES key
     const keyBytes = await exportKey(symKey);
     const chunks = keyToUint32Chunks(keyBytes);
     const encChunks = await encryptKeyChunks(chunks);
 
+    // 4. Store CID on-chain (not the full encrypted bytes)
     const gas = await getGasFees(publicClient!);
     const hash = await walletClient.writeContract({
       address: CONTRACT_ADDRESS,
@@ -97,7 +111,7 @@ export function useEncora() {
         params.title,
         params.description,
         params.previewText,
-        toHex(encryptedContent),
+        encryptedContentCID,
         encChunks as never,
         params.category,
         parseUnits(params.priceEth, 6),
@@ -185,8 +199,12 @@ export function useEncora() {
     const plainChunks = await unsealKeyChunks([...sealedHandles]);
     const keyBytes = uint32ChunksToKey(plainChunks);
     const symKey = await importKey(keyBytes);
-    const encBytes = hexToBytes(content.encryptedContent);
-    return decryptText(encBytes, symKey);
+
+    // Fetch encrypted content from Pinata IPFS gateway
+    const gatewayUrl = `https://${process.env.NEXT_PUBLIC_PINATA_GATEWAY}/ipfs/${content.encryptedContentCID}`;
+    const encRes = await fetch(gatewayUrl);
+    const encBlob = await encRes.arrayBuffer();
+    return decryptText(new Uint8Array(encBlob), symKey);
   }, [walletClient, publicClient, address]);
 
   const withdraw = useCallback(async () => {
