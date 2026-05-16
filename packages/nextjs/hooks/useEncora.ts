@@ -188,12 +188,22 @@ export function useEncora() {
     });
     await publicClient!.waitForTransactionReceipt({ hash: txHash });
 
-    // Ensure a cofhejs permit exists — required for decryptForView
+    // Ensure a cofhejs permit exists and is not expired
     const client = getCofheClient();
     const chainId = await publicClient!.getChainId();
     const existingPermit = client.permits.getActivePermit(chainId, address);
     if (!existingPermit) {
       await client.permits.createSelf({ issuer: address, name: "Encora" });
+    } else {
+      // Check if expired — recreate if so
+      try {
+        const expiration = (existingPermit as { expiration?: number }).expiration;
+        if (expiration && expiration < Math.floor(Date.now() / 1000)) {
+          await client.permits.createSelf({ issuer: address, name: "Encora" });
+        }
+      } catch {
+        await client.permits.createSelf({ issuer: address, name: "Encora" });
+      }
     }
 
     const plainChunks = await unsealKeyChunks([...sealedHandles]);
