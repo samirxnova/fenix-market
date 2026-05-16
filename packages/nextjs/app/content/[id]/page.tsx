@@ -8,6 +8,7 @@ import { useEncora } from "@/hooks/useEncora";
 import { ContentInfo } from "@/src/contracts/encora";
 import { PreviewChat } from "@/components/PreviewChat";
 import { PurchaseButton } from "@/components/PurchaseButton";
+import { SubscribeButton } from "@/components/SubscribeButton";
 import { AccessButton } from "@/components/AccessButton";
 import { ContentViewer } from "@/components/ContentViewer";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -96,6 +97,11 @@ export default function ContentPage() {
                 <span className="label-caps">Access Price</span>
                 <div className="font-manrope text-3xl font-black text-white">
                   {formatUnits(content.price, 6)} USDC
+                  {content.subscriptionDuration > 0n && (
+                    <span className="text-base text-on-surface-variant font-normal ml-1">
+                      / {Number(content.subscriptionDuration) / 86400} days
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -111,7 +117,11 @@ export default function ContentPage() {
                 </ConnectButton.Custom>
               </div>
             ) : !hasPaid ? (
-              <PurchaseButton content={content} onPurchased={() => setHasPaid(true)} />
+              content.subscriptionDuration > 0n ? (
+                <SubscribeButton content={content} onSubscribed={() => setHasPaid(true)} />
+              ) : (
+                <PurchaseButton content={content} onPurchased={() => setHasPaid(true)} />
+              )
             ) : !decryptedText ? (
               <AccessButton content={content} onDecrypted={setDecryptedText} />
             ) : (

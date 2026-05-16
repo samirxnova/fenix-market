@@ -75,15 +75,15 @@ export function useEncora() {
 
   // ── WRITE ─────────────────────────────────────────────
 
-  /** Full upload pipeline: encrypt text → FHE-encrypt key → submit tx
-   *  priceUsdc: price in USDC (e.g. "5.00" = 5 USDC = 5_000000 units) */
+  /** Full upload pipeline */
   const uploadContent = useCallback(async (params: {
     title: string;
     description: string;
     previewText: string;
     fullContent: string;
     category: string;
-    priceEth: string; // field name kept for compat — value is treated as USDC amount
+    priceEth: string;
+    subscriptionDuration?: number; // 0 = one-time, >0 = seconds
   }) => {
     if (!walletClient || !address) throw new Error("Wallet not connected");
 
@@ -120,6 +120,7 @@ export function useEncora() {
         encChunks as never,
         params.category,
         parseUnits(params.priceEth, 6),
+        BigInt(params.subscriptionDuration || 0),
       ],
       ...gas,
     });
@@ -234,7 +235,59 @@ export function useEncora() {
     });
   }, [walletClient, publicClient]);
 
-  /** Get FHE-encrypted purchase counts for seller's content. Returns raw handles to unseal client-side. */
+  /** Subscribe to content (time-gated, FHE-encrypted expiry) */
+  const subscribeContent = useCallback(async (contentId: bigint, price: bigint) => {
+    if (!walletClient || !address) throw new Error("Wallet not connected");
+    const gas = await getGasFees(publicClient!);
+    const allowance = await publicClient!.readContract({
+      address: USDC_ADDRESS, abi: ERC20_ABI, functionName: "allowance",
+      args: [address, CONTRACT_ADDRESS],
+    }) as bigint;
+    if (allowance < price) {
+      const approveTx = await walletClient.writeContract({
+        address: USDC_ADDRESS, abi: ERC20_ABI, functionName: "approve",
+        args: [CONTRACT_ADDRESS, price], ...gas,
+      });
+      await publicClient!.waitForTransactionReceipt({ hash: approveTx });
+    }
+    return walletClient.writeContract({
+      address: CONTRACT_ADDRESS, abi: ENCORA_ABI, functionName: "subscribe",
+      args: [contentId], ...gas,
+    });
+  }, [walletClient, publicClient, address]);
+
+  /** Renew subscription */
+  const renewSubscription = useCallback(async (contentId: bigint, price: bigint) => {
+    if (!walletClient || !address) throw new Error("Wallet not connected");
+    const gas = await getGasFees(publicClient!);
+    const allowance = await publicClient!.readContract({
+      address: USDC_ADDRESS, abi: ERC20_ABI, functionName: "allowance",
+      args: [address, CONTRACT_ADDRESS],
+    }) as bigint;
+    if (allowance < price) {
+      const approveTx = await walletClient.writeContract({
+        address: USDC_ADDRESS, abi: ERC20_ABI, functionName: "approve",
+        args: [CONTRACT_ADDRESS, price], ...gas,
+      });
+      await publicClient!.waitForTransactionReceipt({ hash: approveTx });
+    }
+    return walletClient.writeContract({
+      address: CONTRACT_ADDRESS, abi: ENCORA_ABI, functionName: "renewSubscription",
+      args: [contentId], ...gas,
+    });
+  }, [walletClient, publicClient, address]);
+
+  /** Get encrypted subscription expiries — buyer unseals client-side */
+  const getMySubscriptions = useCallback(async (contentIds: bigint[]): Promise<bigint[]> => {
+    if (!address || !publicClient) return [];
+    const handles = await publicClient.readContract({
+      address: CONTRACT_ADDRESS, abi: ENCORA_ABI, functionName: "getMySubscriptions",
+      args: [contentIds],
+    }) as unknown as bigint[];
+    return handles;
+  }, [publicClient, address]);
+
+  /** Get FHE-encrypted purchase counts for seller's content. */
   const getMyAnalytics = useCallback(async (contentIds: bigint[]): Promise<bigint[]> => {
     if (!address || !publicClient) return [];
     const handles = await publicClient.readContract({
@@ -247,6 +300,6 @@ export function useEncora() {
   return {
     getContent, listContents, listByCategory, getMyUploads, getMyPurchases,
     checkAccess, getSellerBalance, uploadContent, purchaseContent, requestAndDecrypt, withdraw,
-    getMyAnalytics,
+    getMyAnalytics, subscribeContent, renewSubscription, getMySubscriptions,
   };
 }

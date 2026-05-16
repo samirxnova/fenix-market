@@ -18,14 +18,14 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const usdc = USDC_BY_NETWORK[hre.network.name] || USDC_ARB_SEPOLIA;
   console.log(`Deploying Encora on ${hre.network.name} with USDC: ${usdc}`);
 
-  const result = await deploy("EncoraV2", {
+  const result = await deploy("EncoraV3", {
     from: deployer,
     args: [usdc],
     log: true,
     autoMine: true,
   });
 
-  console.log("EncoraV2 deployed to:", result.address);
+  console.log("EncoraV3 deployed to:", result.address);
 
   if (hre.network.name !== "localhost" && hre.network.name !== "hardhat") {
     await new Promise((resolve) => setTimeout(resolve, 30000));
@@ -41,4 +41,4 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 };
 
 export default deploy;
-deploy.tags = ["EncoraV2", "all"];
+deploy.tags = ["EncoraV3", "all"];

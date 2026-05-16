@@ -27,6 +27,7 @@ export default function UploadPage() {
   const [form, setForm] = useState({
     title: "", description: "", previewText: "", fullContent: "",
     category: "skills", priceEth: "5.00",
+    isSubscription: false, subscriptionDays: 30,
   });
 
   const set = (k: keyof typeof form) =>
@@ -42,7 +43,10 @@ export default function UploadPage() {
         setEncryptStep(i);
         if (i < 2) await new Promise(r => setTimeout(r, 600));
       }
-      await uploadContent(form);
+      await uploadContent({
+        ...form,
+        subscriptionDuration: form.isSubscription ? form.subscriptionDays * 86400 : 0,
+      });
       toast.success("Content deployed!");
       router.push("/dashboard");
     } catch (err) {
@@ -90,10 +94,34 @@ export default function UploadPage() {
                 {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
               </select>
             </Field>
-            <Field label="Price (USDC)">
+            <Field label={form.isSubscription ? "Price (USDC / period)" : "Price (USDC)"}>
               <input className="input-field" type="number" step="0.001" min="0" value={form.priceEth} onChange={set("priceEth")} />
             </Field>
           </div>
+          {/* Subscription toggle */}
+          <div className="flex items-center justify-between p-4 bg-surface-container rounded-xl">
+            <div>
+              <p className="text-sm font-semibold text-on-surface">Subscription pricing</p>
+              <p className="text-xs text-on-surface-variant mt-0.5">Buyers pay per time period instead of one-time</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setForm(f => ({ ...f, isSubscription: !f.isSubscription }))}
+              className={`w-11 h-6 rounded-full transition-colors relative ${form.isSubscription ? "bg-secondary" : "bg-outline-variant/50"}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${form.isSubscription ? "translate-x-6" : "translate-x-1"}`} />
+            </button>
+          </div>
+          {form.isSubscription && (
+            <Field label="Subscription Duration">
+              <select className="input-field" value={form.subscriptionDays} onChange={(e) => setForm(f => ({ ...f, subscriptionDays: Number(e.target.value) }))}>
+                <option value={7}>7 days</option>
+                <option value={30}>30 days</option>
+                <option value={90}>90 days</option>
+                <option value={365}>365 days</option>
+              </select>
+            </Field>
+          )}
           <Field label="Short Description (public)">
             <input className="input-field" value={form.description} onChange={set("description")} placeholder="One-line summary shown in marketplace" />
           </Field>

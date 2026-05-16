@@ -38,6 +38,7 @@ export interface ContentInfo {
   previewText: string;
   encryptedContentCID: string;
   price: bigint;
+  subscriptionDuration: bigint;
   active: boolean;
   createdAt: bigint;
   category: string;
@@ -104,6 +105,7 @@ export const ENCORA_ABI = [
       { components: IN_EUINT32_COMPONENTS, internalType: "struct InEuint32[]", name: "encSymKeyChunks", type: "tuple[]" },
       { internalType: "string", name: "category", type: "string" },
       { internalType: "uint256", name: "price", type: "uint256" },
+      { internalType: "uint256", name: "subscriptionDuration", type: "uint256" },
     ],
     name: "uploadContent",
     outputs: [{ internalType: "uint256", name: "id", type: "uint256" }],
@@ -115,6 +117,27 @@ export const ENCORA_ABI = [
     name: "purchase",
     outputs: [],
     stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "contentId", type: "uint256" }],
+    name: "subscribe",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "contentId", type: "uint256" }],
+    name: "renewSubscription",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256[]", name: "contentIds", type: "uint256[]" }],
+    name: "getMySubscriptions",
+    outputs: [{ internalType: "euint64[]", name: "expiries", type: "bytes32[]" }],
+    stateMutability: "view",
     type: "function",
   },
   {
@@ -190,7 +213,7 @@ export const ENCORA_ABI = [
       { internalType: "uint256", name: "limit", type: "uint256" },
     ],
     name: "listContents",
-    outputs: [{ components: [{ internalType: "uint256", name: "id", type: "uint256" }, { internalType: "address", name: "seller", type: "address" }, { internalType: "string", name: "title", type: "string" }, { internalType: "string", name: "description", type: "string" }, { internalType: "string", name: "previewText", type: "string" }, { internalType: "string", name: "encryptedContentCID", type: "string" }, { internalType: "uint256", name: "price", type: "uint256" }, { internalType: "bool", name: "active", type: "bool" }, { internalType: "uint256", name: "createdAt", type: "uint256" }, { internalType: "string", name: "category", type: "string" }, { internalType: "uint256", name: "keyChunks", type: "uint256" }], internalType: "struct Encora.ContentInfo[]", name: "", type: "tuple[]" }],
+    outputs: [{ components: [{ internalType: "uint256", name: "id", type: "uint256" }, { internalType: "address", name: "seller", type: "address" }, { internalType: "string", name: "title", type: "string" }, { internalType: "string", name: "description", type: "string" }, { internalType: "string", name: "previewText", type: "string" }, { internalType: "string", name: "encryptedContentCID", type: "string" }, { internalType: "uint256", name: "price", type: "uint256" }, { internalType: "uint256", name: "subscriptionDuration", type: "uint256" }, { internalType: "bool", name: "active", type: "bool" }, { internalType: "uint256", name: "createdAt", type: "uint256" }, { internalType: "string", name: "category", type: "string" }, { internalType: "uint256", name: "keyChunks", type: "uint256" }], internalType: "struct Encora.ContentInfo[]", name: "", type: "tuple[]" }],
     stateMutability: "view",
     type: "function",
   },
@@ -201,7 +224,7 @@ export const ENCORA_ABI = [
       { internalType: "uint256", name: "limit", type: "uint256" },
     ],
     name: "listByCategory",
-    outputs: [{ components: [{ internalType: "uint256", name: "id", type: "uint256" }, { internalType: "address", name: "seller", type: "address" }, { internalType: "string", name: "title", type: "string" }, { internalType: "string", name: "description", type: "string" }, { internalType: "string", name: "previewText", type: "string" }, { internalType: "string", name: "encryptedContentCID", type: "string" }, { internalType: "uint256", name: "price", type: "uint256" }, { internalType: "bool", name: "active", type: "bool" }, { internalType: "uint256", name: "createdAt", type: "uint256" }, { internalType: "string", name: "category", type: "string" }, { internalType: "uint256", name: "keyChunks", type: "uint256" }], internalType: "struct Encora.ContentInfo[]", name: "", type: "tuple[]" }],
+    outputs: [{ components: [{ internalType: "uint256", name: "id", type: "uint256" }, { internalType: "address", name: "seller", type: "address" }, { internalType: "string", name: "title", type: "string" }, { internalType: "string", name: "description", type: "string" }, { internalType: "string", name: "previewText", type: "string" }, { internalType: "string", name: "encryptedContentCID", type: "string" }, { internalType: "uint256", name: "price", type: "uint256" }, { internalType: "uint256", name: "subscriptionDuration", type: "uint256" }, { internalType: "bool", name: "active", type: "bool" }, { internalType: "uint256", name: "createdAt", type: "uint256" }, { internalType: "string", name: "category", type: "string" }, { internalType: "uint256", name: "keyChunks", type: "uint256" }], internalType: "struct Encora.ContentInfo[]", name: "", type: "tuple[]" }],
     stateMutability: "view",
     type: "function",
   },

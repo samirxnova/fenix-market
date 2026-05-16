@@ -10,6 +10,7 @@ const NAV = [
   { href: "/upload", label: "Sell" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/purchases", label: "Purchases" },
+  { href: "/subscriptions", label: "Subscriptions" },
 ];
 
 export function Navbar() {
