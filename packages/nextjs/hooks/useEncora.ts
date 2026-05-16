@@ -216,8 +216,19 @@ export function useEncora() {
     });
   }, [walletClient, publicClient]);
 
+  /** Get FHE-encrypted purchase counts for seller's content. Returns raw handles to unseal client-side. */
+  const getMyAnalytics = useCallback(async (contentIds: bigint[]): Promise<bigint[]> => {
+    if (!address || !publicClient) return [];
+    const handles = await publicClient.readContract({
+      address: CONTRACT_ADDRESS, abi: ENCORA_ABI, functionName: "getMyAnalytics",
+      args: [contentIds],
+    }) as bigint[];
+    return handles;
+  }, [publicClient, address]);
+
   return {
     getContent, listContents, listByCategory, getMyUploads, getMyPurchases,
     checkAccess, getSellerBalance, uploadContent, purchaseContent, requestAndDecrypt, withdraw,
+    getMyAnalytics,
   };
 }

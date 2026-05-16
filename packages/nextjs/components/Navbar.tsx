@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -13,6 +14,8 @@ const NAV = [
 
 export function Navbar() {
   const path = usePathname();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   return (
     <header className="fixed top-0 w-full z-50 flex items-center justify-between px-6 h-16 bg-[#16161e]/80 backdrop-blur-md border-b border-white/10">
@@ -39,11 +42,13 @@ export function Navbar() {
           })}
         </nav>
       </div>
-      <ConnectButton
-        showBalance={false}
-        chainStatus="none"
-        accountStatus="address"
-      />
+      {mounted && (
+        <ConnectButton
+          showBalance={false}
+          chainStatus="none"
+          accountStatus="address"
+        />
+      )}
     </header>
   );
 }

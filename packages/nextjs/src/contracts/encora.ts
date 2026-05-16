@@ -237,6 +237,13 @@ export const ENCORA_ABI = [
     type: "function",
   },
   {
+    inputs: [{ internalType: "uint256[]", name: "contentIds", type: "uint256[]" }],
+    name: "getMyAnalytics",
+    outputs: [{ internalType: "euint32[]", name: "counts", type: "bytes32[]" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
     inputs: [
       { internalType: "uint256", name: "", type: "uint256" },
       { internalType: "address", name: "", type: "address" },

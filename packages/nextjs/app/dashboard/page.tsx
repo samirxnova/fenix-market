@@ -5,21 +5,45 @@ import Link from "next/link";
 import { useEncora } from "@/hooks/useEncora";
 import { ContentInfo } from "@/src/contracts/encora";
 import { formatUnits } from "viem";
+import { unsealKeyChunks } from "@/utils/unseal";
 import toast from "react-hot-toast";
 
 export default function DashboardPage() {
-  const { getMyUploads, getContent, getSellerBalance, withdraw } = useEncora();
+  const { getMyUploads, getContent, getSellerBalance, withdraw, getMyAnalytics } = useEncora();
   const [uploads, setUploads] = useState<ContentInfo[]>([]);
   const [balance, setBalance] = useState(0n);
   const [loading, setLoading] = useState(true);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [purchaseCounts, setPurchaseCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     Promise.all([
-      getMyUploads().then(ids => Promise.all(ids.map(getContent))).then(setUploads),
+      getMyUploads().then(async (ids) => {
+        const contents = await Promise.all(ids.map(getContent));
+        setUploads(contents);
+        // Try to unseal encrypted purchase counts (only works if seller has permit)
+        if (ids.length > 0) {
+          try {
+            const handles = await getMyAnalytics(ids);
+            if (handles.length > 0) {
+              const { FheTypes } = await import("@cofhe/sdk");
+              const { getCofheClient } = await import("@/services/cofhe-client");
+              const client = getCofheClient();
+              const counts: Record<string, number> = {};
+              for (let i = 0; i < handles.length; i++) {
+                try {
+                  const val = await client.decryptForView(handles[i], FheTypes.Uint32).withPermit().execute();
+                  counts[ids[i].toString()] = Number(val);
+                } catch { counts[ids[i].toString()] = -1; } // -1 = couldn't decrypt
+              }
+              setPurchaseCounts(counts);
+            }
+          } catch { /* analytics not available — V1 contract or no permit */ }
+        }
+      }),
       getSellerBalance().then(setBalance),
     ]).finally(() => setLoading(false));
-  }, [getMyUploads, getContent, getSellerBalance]);
+  }, [getMyUploads, getContent, getSellerBalance, getMyAnalytics]);
 
   async function handleWithdraw() {
     setWithdrawing(true);
@@ -114,6 +138,11 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex items-center gap-6">
                   <span className="font-mono text-sm text-on-surface-variant">{formatUnits(c.price, 6)} USDC</span>
+                  {purchaseCounts[c.id.toString()] !== undefined && purchaseCounts[c.id.toString()] >= 0 && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full bg-indigo-500/15 text-indigo-300">
+                      {purchaseCounts[c.id.toString()]} sales
+                    </span>
+                  )}
                   <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full ${
                     c.active ? "bg-secondary/15 text-secondary" : "bg-surface-container text-slate-500"
                   }`}>
