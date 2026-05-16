@@ -47,11 +47,16 @@ export function useEncora() {
   }, [publicClient, address]);
 
   const getMyPurchases = useCallback(async (): Promise<bigint[]> => {
-    if (!address) return [];
-    const data = await publicClient!.readContract({
-      address: CONTRACT_ADDRESS, abi: ENCORA_ABI, functionName: "getPurchasesByBuyer", args: [address],
+    if (!address || !publicClient) return [];
+    // EncoraV2 removed purchasesByBuyer for privacy — use event logs instead
+    const logs = await publicClient.getContractEvents({
+      address: CONTRACT_ADDRESS,
+      abi: ENCORA_ABI,
+      eventName: "ContentPurchased",
+      args: { buyer: address },
+      fromBlock: 0n,
     });
-    return data as bigint[];
+    return logs.map(log => (log.args as { id: bigint }).id);
   }, [publicClient, address]);
 
   const checkAccess = useCallback(async (contentId: bigint): Promise<boolean> => {
@@ -191,19 +196,22 @@ export function useEncora() {
     // Ensure a cofhejs permit exists and is not expired
     const client = getCofheClient();
     const chainId = await publicClient!.getChainId();
-    const existingPermit = client.permits.getActivePermit(chainId, address);
-    if (!existingPermit) {
-      await client.permits.createSelf({ issuer: address, name: "Encora" });
-    } else {
-      // Check if expired — recreate if so
-      try {
-        const expiration = (existingPermit as { expiration?: number }).expiration;
-        if (expiration && expiration < Math.floor(Date.now() / 1000)) {
-          await client.permits.createSelf({ issuer: address, name: "Encora" });
+    let needsNewPermit = false;
+    try {
+      const existingPermit = client.permits.getActivePermit(chainId, address);
+      if (!existingPermit) {
+        needsNewPermit = true;
+      } else {
+        const exp = (existingPermit as { expiration?: number }).expiration;
+        if (exp && exp < Math.floor(Date.now() / 1000)) {
+          needsNewPermit = true;
         }
-      } catch {
-        await client.permits.createSelf({ issuer: address, name: "Encora" });
       }
+    } catch {
+      needsNewPermit = true;
+    }
+    if (needsNewPermit) {
+      await client.permits.createSelf({ issuer: address, name: "Encora" });
     }
 
     const plainChunks = await unsealKeyChunks([...sealedHandles]);
