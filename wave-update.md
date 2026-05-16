@@ -2,27 +2,37 @@
 
 ## Links
 - Frontend Demo — https://encora-three.vercel.app/
-- Contract (Arb Sepolia) — https://sepolia.arbiscan.io/address/0x072CbfC304e41F0e73A09721203Ac2059a0Cb03e
+- Contract (Arb Sepolia) — https://sepolia.arbiscan.io/address/0xb30714F68002F901406d68B9648ABb9851F0d318
 
-## What We Built
+## The Gap We Closed
 
-**The Gap We Closed.** Knowledge has always been sold on trust — buyers trust the seller's claims, and sellers trust that buyers won't redistribute their work. Neither holds on-chain. Encora closes both gaps with Fully Homomorphic Encryption: the seller's content is encrypted before it ever leaves the browser, and the buyer's decryption key is generated on-chain only after payment, with cryptographic guarantees that not even the marketplace can read the content.
+Knowledge marketplaces run on trust — buyers trust seller claims, sellers trust buyers won't redistribute. Neither holds on-chain. Encora closes both with FHE: content is encrypted before it leaves the browser, and the decryption key is generated on-chain only after payment. Not even the marketplace can read it.
 
-**Two-layer encryption, zero server trust.** The seller writes their content in the browser. A random AES-256-GCM key encrypts the full text client-side; the ciphertext is stored on-chain as public bytes — meaningless without the key. The AES key is then split into 8 × `euint32` chunks and CoFHE-encrypted on-chain in `Encora.sol`, with `FHE.allowThis` ensuring the contract retains access to grant future buyers. No server, no backend, no database ever sees the plaintext.
+But we went further: **who bought what is also private.** Purchase counts are FHE-encrypted (only the seller can see them). Subscription expiry is FHE-encrypted (only the buyer knows when it expires). The marketplace can't surveil its own users.
 
-**Buyer-gated decryption.** When a buyer pays in USDC and calls `requestAccess`, the contract calls `FHE.allow(chunk, buyer)` for each of the 8 key chunks. The buyer unseals them client-side via `cofhejs` using a self-permit (EIP-712, no gas), reassembles the AES key, and decrypts the content entirely in the browser. A nullifier set (`usedPubKeys`) prevents any public key from being reused — binding each decryption to a single key pair.
+## How It Works
 
-**AI-powered discovery.** Sellers write a `previewText` that is never shown publicly. It feeds an OpenRouter-powered AI chat widget (edge-streamed, server-side API key) so any visitor can ask questions about the content before buying. The AI is scoped strictly to the preview — the encrypted content never reaches the server.
+**Two-layer encryption.** The seller's full text is AES-256-GCM encrypted in the browser. The ciphertext is uploaded to IPFS via Pinata — only the CID is stored on-chain. The AES key is split into 8 × `euint32` chunks, CoFHE-encrypted, and stored in `EncoraV3.sol` with `FHE.allowThis` so the contract can grant future buyers.
+
+**Buyer-gated decryption.** After paying in USDC, the buyer calls `requestAccess`. The contract calls `FHE.allow(chunk, buyer)` for each key chunk. The buyer unseals them client-side via `cofhejs` using a self-permit (EIP-712, no gas), reassembles the AES key, fetches encrypted content from IPFS, and decrypts locally.
+
+**Confidential subscriptions.** Content can be subscription-based (7/30/90/365 days). The expiry timestamp is stored as FHE-encrypted `euint64` — only the buyer can decrypt it. The `/subscriptions` page shows the buyer's private feed, decrypted entirely in their browser.
+
+**Confidential analytics.** Purchase counts per content are FHE-encrypted `euint32` — only the seller can decrypt them on their dashboard. Competitors and observers see nothing.
+
+**AI-powered discovery.** Sellers write a `previewText` (never shown publicly). It powers an OpenRouter AI chat widget so visitors can ask questions before buying.
 
 ## What We Shipped
 
-- **`Encora.sol`** deployed on Arbitrum Sepolia — CoFHE-gated AES key management with `euint32` chunks, USDC payment, nullifier set, and seller withdrawal
-- **CoFHE SDK v0.5.1** — fully migrated with `decryptForView().withPermit()` self-permit flow for client-side unsealing
-- **Two-layer encryption pipeline** — browser AES-GCM encryption + `cofhejs` FHE key chunk encryption, all client-side
-- **USDC payment flow** — ERC-20 approve + purchase with live EIP-1559 gas fee fetching (fixes Arbitrum Sepolia base fee spikes)
-- **AI chat widget** — OpenRouter streaming chat scoped to preview text only, 10-message session rate limit, no wallet required
-- **Full marketplace UI** — glassmorphic dark design system (Manrope/Inter/Space Grotesk), marketplace grid, 3-step upload wizard with encryption progress animation, content detail with sticky pricing card, seller dashboard with USDC withdrawal, buyer purchases page
+- **`EncoraV3.sol`** on Arbitrum Sepolia — subscriptions with FHE-encrypted expiry, FHE-encrypted purchase counts, IPFS content storage, USDC payment
+- **IPFS via Pinata** — encrypted content stored on IPFS, only CID on-chain (removes size limits)
+- **Drag & drop upload** — drop `.md`/`.txt` files into the upload wizard
+- **Confidential subscriptions** — `subscribe()`, `renewSubscription()`, `getMySubscriptions()` with `euint64` expiry
+- **Confidential analytics** — `purchaseCount` as `euint32`, `getMyAnalytics()` seller-only
+- **Private purchase history** — `purchasesByBuyer` mapping removed, uses event logs only
+- **Subscription UI** — toggle in upload form, `/subscriptions` page with FHE-decrypted feed
+- **CoFHE SDK v0.5.1** — `decryptForView().withPermit()` for both `Uint32` and `Uint64` types
 
 ## What's Next
 
-Expanding content types beyond text/markdown to support structured data (JSON datasets, model weights) using the same two-layer encryption pattern. Adding seller reputation scores and content ratings stored as FHE-encrypted aggregates to prevent manipulation.
+Confidential ratings (FHE-encrypted individual votes, aggregate-only reveal) and Phala TEE AI integration (encrypted preview decrypted only inside TEE, zero plaintext anywhere).

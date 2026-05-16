@@ -2,38 +2,53 @@
 
 **Privacy-preserving knowledge marketplace powered by Fully Homomorphic Encryption (FHE)**
 
-Sellers upload text/markdown content — diet plans, skill guides, trading strategies, tutorials — protected by two-layer encryption. Buyers pay in USDC and decrypt content entirely client-side. Not even the marketplace can read it.
+Sellers upload text/markdown content — diet plans, skill guides, trading strategies, tutorials — protected by two-layer encryption. Buyers pay in USDC and decrypt content entirely client-side. Not even the marketplace can read it. Purchase history, subscription status, and analytics are all FHE-encrypted — nobody can see who bought what.
 
 ---
 
 ## How It Works
 
 ```
-Seller                    Encora Contract (Arb Sepolia)        Buyer
+Seller                    EncoraV3 Contract (Arb Sepolia)      Buyer
   │                                │                              │
   │── uploadContent(               │                              │
   │     previewText,               │                              │
-  │     AES(fullText),             │                              │
-  │     FHE(aesKey)) ─────────────►│                              │
+  │     IPFS(AES(fullText)),       │                              │
+  │     FHE(aesKey),               │                              │
+  │     subscriptionDuration) ────►│                              │
   │                                │  previewText → AI chat ─────►│
-  │                                │◄─ purchase (USDC) ───────────│
+  │                                │◄─ purchase/subscribe (USDC) ─│
   │                                │◄─ requestAccess(pubKey) ─────│
   │                                │  FHE.allow(keyChunks, buyer) │
   │                                │── sealedKeyChunks ──────────►│
   │                                │  unseal → AES key            │
-  │                                │  decrypt fullText locally    │
+  │                                │  fetch IPFS → decrypt locally│
 ```
 
 ### Two-Layer Encryption
 
 **Layer 1 — AES-GCM (browser, off-chain):**
-Seller encrypts the full text with a random 256-bit AES key in the browser. The ciphertext is stored on-chain as public bytes — unreadable without the key.
+Seller encrypts the full text with a random 256-bit AES key in the browser. The ciphertext is uploaded to IPFS via Pinata. Only the CID is stored on-chain — unreadable without the key.
 
 **Layer 2 — FHE (on-chain, Fhenix CoFHE):**
-The AES key is split into 8 × `euint32` chunks and stored as FHE ciphertext. When a buyer pays and provides their sealing public key, the contract calls `FHE.allow(chunk, buyer)` for each chunk. The buyer unseals them client-side via `cofhejs`, reassembles the AES key, and decrypts the content locally.
+The AES key is split into 8 × `euint32` chunks and stored as FHE ciphertext. When a buyer pays and provides their sealing public key, the contract calls `FHE.allow(chunk, buyer)` for each chunk. The buyer unseals them client-side via `cofhejs`, reassembles the AES key, fetches encrypted content from IPFS, and decrypts locally.
 
-**AI Chat:**
+### Privacy Model
+
+| Data | Visibility |
+|------|-----------|
+| Content title, description, category, price | Public |
+| Encrypted content (IPFS CID) | Public (useless without key) |
+| **Who bought which content** | **Private** — event logs only |
+| **Subscription expiry** | **FHE-encrypted** — only buyer can decrypt |
+| **Purchase counts per content** | **FHE-encrypted** — only seller can decrypt |
+| **AI preview text** | Never shown publicly — AI-only context |
+
+### AI Chat
 The seller writes a `previewText` (never shown publicly). It's used as context for an OpenRouter-powered AI chat widget — any visitor can ask questions about the content before buying.
+
+### Subscriptions
+Content can be one-time purchase or subscription-based. Subscription expiry is stored as FHE-encrypted `euint64` — only the buyer can see when their subscription expires. The buyer's subscription feed is decrypted entirely in their browser.
 
 ---
 
@@ -45,16 +60,17 @@ The seller writes a `previewText` (never shown publicly). It's used as context f
 | FHE client | `@cofhe/sdk` 0.5.1 |
 | Frontend | Next.js 14, Tailwind CSS, wagmi v2, RainbowKit |
 | Payment | USDC ERC-20 (Arbitrum Sepolia) |
+| Storage | Pinata IPFS (encrypted content) |
 | AI chat | OpenRouter (OpenAI-compatible, `gpt-4o-mini`) |
 | Network | Arbitrum Sepolia (testnet) |
 
 ---
 
-## Contract
+## Contracts
 
 | Item | Value |
 |------|-------|
-| Encora contract | `0x072CbfC304e41F0e73A09721203Ac2059a0Cb03e` |
+| EncoraV3 (latest) | `0xb30714F68002F901406d68B9648ABb9851F0d318` |
 | USDC (Arb Sepolia) | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` |
 | Network | Arbitrum Sepolia (Chain ID: 421614) |
 
@@ -65,33 +81,49 @@ The seller writes a `previewText` (never shown publicly). It's used as context f
 ```
 encora/
 ├── packages/
-│   ├── hardhat/                  # Smart contract
+│   ├── hardhat/                  # Smart contracts
 │   │   ├── contracts/
-│   │   │   └── Encora.sol        # Main contract
+│   │   │   ├── Encora.sol        # V1 contract
+│   │   │   ├── EncoraV2.sol      # V2 + FHE analytics
+│   │   │   └── EncoraV3.sol      # V3 + subscriptions (latest)
 │   │   ├── test/
-│   │   │   └── Encora.test.ts    # 18 unit tests
+│   │   │   └── Encora.test.ts
 │   │   ├── deploy/
 │   │   │   └── 001_deploy_encora.ts
 │   │   └── hardhat.config.ts
 │   └── nextjs/                   # Frontend
 │       ├── app/
 │       │   ├── page.tsx          # Marketplace
-│       │   ├── upload/           # Seller upload (3-step wizard)
-│       │   ├── content/[id]/     # Content detail + AI chat + unlock
-│       │   ├── dashboard/        # Seller dashboard + withdraw
-│       │   ├── purchases/        # Buyer purchases
-│       │   └── api/chat/         # OpenRouter AI proxy (edge)
-│       ├── components/           # UI components
+│       │   ├── upload/           # Seller upload (3-step wizard + subscription toggle)
+│       │   ├── content/[id]/     # Content detail + AI chat + purchase/subscribe + unlock
+│       │   ├── dashboard/        # Seller dashboard + FHE analytics + withdraw
+│       │   ├── purchases/        # Buyer purchases (event-based)
+│       │   ├── subscriptions/    # Buyer's private subscription feed (FHE-decrypted)
+│       │   └── api/
+│       │       ├── chat/         # OpenRouter AI proxy (edge)
+│       │       └── upload-url/   # Pinata presigned upload URL
+│       ├── components/
+│       │   ├── Navbar.tsx
+│       │   ├── Providers.tsx
+│       │   ├── PreviewChat.tsx
+│       │   ├── ContentViewer.tsx
+│       │   ├── PurchaseButton.tsx
+│       │   ├── SubscribeButton.tsx
+│       │   ├── AccessButton.tsx
+│       │   ├── DragDropZone.tsx
+│       │   └── PermitModal.tsx
 │       ├── hooks/
-│       │   ├── useEncora.ts      # Contract interactions
+│       │   ├── useEncora.ts      # All contract interactions
 │       │   ├── useCofhe.ts       # FHE client init
 │       │   └── usePreviewChat.ts # AI chat streaming
 │       └── utils/
 │           ├── crypto.ts         # AES-GCM encrypt/decrypt
 │           ├── fheEncrypt.ts     # FHE key chunk encryption
 │           ├── unseal.ts         # FHE unsealing with permit
-│           └── gas.ts            # Live EIP-1559 gas fees
+│           ├── gas.ts            # Live EIP-1559 gas fees
+│           └── pinata.ts         # Pinata SDK instance
 ├── plan.md
+├── features-plan.md
 ├── TESTING_GUIDE.md
 └── README.md
 ```
@@ -108,47 +140,32 @@ encora/
 - Testnet USDC — [Circle faucet](https://faucet.circle.com)
 - OpenRouter API key — [openrouter.ai](https://openrouter.ai)
 - WalletConnect project ID — [cloud.walletconnect.com](https://cloud.walletconnect.com)
+- Pinata account — [pinata.cloud](https://pinata.cloud)
 
 ### Install
 
 ```bash
-# Install all packages
 cd packages/hardhat && npm install
 cd ../nextjs && npm install
-```
-
-### Run Contract Tests
-
-```bash
-cd packages/hardhat
-npm test
 ```
 
 ### Run Frontend
 
 ```bash
-# 1. Configure environment
 cp packages/nextjs/.env.example packages/nextjs/.env
-# Fill in:
-#   OPENROUTER_API_KEY=
-#   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
-#   NEXT_PUBLIC_CONTRACT_ADDRESS=0x072CbfC304e41F0e73A09721203Ac2059a0Cb03e
-#   NEXT_PUBLIC_CHAIN_ID=421614
-
-# 2. Start dev server
-cd packages/nextjs
-npm run dev
+# Fill in all env vars (see below)
+cd packages/nextjs && npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000)
 
-### Deploy Contract (optional — already deployed)
+### Deploy Contract
 
 ```bash
 cd packages/hardhat
 cp .env.example .env
 # Fill in PRIVATE_KEY and ARB_SEPOLIA_RPC_URL
-npm run deploy -- --network arb-sepolia
+npx hardhat deploy --network arb-sepolia
 ```
 
 ---
@@ -158,38 +175,38 @@ npm run deploy -- --network arb-sepolia
 ### Seller: Upload Content
 1. Connect wallet → navigate to **Sell**
 2. Fill metadata (title, category, price in USDC, description)
-3. Write preview text (used by AI — never shown publicly)
-4. Write full content in markdown
-5. Click **Encrypt & Deploy** → browser AES-encrypts content → FHE-encrypts AES key → submits to contract
+3. Toggle **Subscription pricing** if desired (7/30/90/365 days)
+4. Write preview text (AI context — never shown publicly)
+5. Write or drag-drop full content in markdown
+6. Click **Encrypt & Deploy** → AES-encrypts → uploads to IPFS → FHE-encrypts key → stores CID on-chain
 
-### Buyer: Purchase & Unlock
-1. Browse marketplace → click content
-2. Chat with AI about the content (no wallet needed)
-3. Connect wallet → click **Buy for X USDC**
-   - Tx 1: Approve USDC spend
-   - Tx 2: Purchase
-4. Click **Unlock Content**
-   - Tx 3: `requestAccess` (grants FHE access to key chunks)
-   - Sign EIP-712 permit (free, no gas)
-   - cofhejs unseals key chunks client-side
-   - AES key reassembled → content decrypted in browser
-   - Full markdown content displayed
+### Buyer: Purchase & Unlock (One-time)
+1. Browse marketplace → click content → chat with AI
+2. Connect wallet → click **Buy for X USDC**
+3. Click **Unlock Content** → requestAccess → permit sign → unseal → fetch IPFS → decrypt
 
-### Seller: Withdraw
-1. Navigate to **Dashboard**
-2. Click **Withdraw Funds** → USDC transferred to wallet
+### Buyer: Subscribe (Time-gated)
+1. Click **Subscribe · X USDC / Y days**
+2. Subscription expiry stored as FHE-encrypted timestamp — only buyer sees it
+3. View active subscriptions at `/subscriptions` (private feed, decrypted client-side)
+
+### Seller: Dashboard
+1. View encrypted purchase counts (FHE-decrypted, seller-only)
+2. Withdraw USDC earnings
 
 ---
 
-## Security Model
+## Security & Privacy Model
 
-- **Full content** is never sent to any server in plaintext
-- **AES key** is stored as FHE ciphertext — unreadable from chain state
-- **Nullifier set** prevents a buyer from reusing the same public key to get multiple decryptions
-- **`FHE.allowThis`** on all key chunks — contract retains access to grant future buyers
-- **No `FHE.allowPublic`** on key chunks — they can never be publicly decrypted
-- **OpenRouter API key** is server-side only — never exposed to the browser
-- **AI context** is limited to `previewText` — the encrypted content is never sent to OpenRouter
+- **Full content** never sent to any server in plaintext
+- **Encrypted content** stored on IPFS — only CID on-chain
+- **AES key** stored as FHE ciphertext — unreadable from chain state
+- **Purchase history** removed from public mappings — uses event logs only
+- **Purchase counts** FHE-encrypted — only seller can decrypt
+- **Subscription expiry** FHE-encrypted — only buyer can decrypt
+- **Nullifier set** prevents public key reuse
+- **AI context** limited to `previewText` — encrypted content never reaches OpenRouter
+- **OpenRouter API key** server-side only
 
 ---
 
@@ -197,16 +214,17 @@ npm run deploy -- --network arb-sepolia
 
 ### `packages/hardhat/.env`
 ```env
-PRIVATE_KEY=                    # Deployer private key (without 0x prefix issues — strip if needed)
-ARB_SEPOLIA_RPC_URL=            # Arbitrum Sepolia RPC
-BASE_SEPOLIA_RPC_URL=           # Base Sepolia RPC (optional)
-ARBISCAN_API_KEY=               # For contract verification (optional)
+PRIVATE_KEY=
+ARB_SEPOLIA_RPC_URL=
+ARBISCAN_API_KEY=               # Optional, for verification
 ```
 
 ### `packages/nextjs/.env`
 ```env
-OPENROUTER_API_KEY=             # Server-side only — never prefix with NEXT_PUBLIC_
-NEXT_PUBLIC_CONTRACT_ADDRESS=0x072CbfC304e41F0e73A09721203Ac2059a0Cb03e
+OPENROUTER_API_KEY=             # Server-side only
+PINATA_JWT=                     # Server-side only
+NEXT_PUBLIC_PINATA_GATEWAY=     # e.g. your-gateway.mypinata.cloud
+NEXT_PUBLIC_CONTRACT_ADDRESS=0xb30714F68002F901406d68B9648ABb9851F0d318
 NEXT_PUBLIC_CHAIN_ID=421614
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 NEXT_PUBLIC_APP_URL=http://localhost:3000
