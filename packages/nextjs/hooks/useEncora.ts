@@ -222,7 +222,7 @@ export function useEncora() {
     const handles = await publicClient.readContract({
       address: CONTRACT_ADDRESS, abi: ENCORA_ABI, functionName: "getMyAnalytics",
       args: [contentIds],
-    }) as bigint[];
+    }) as unknown as bigint[];
     return handles;
   }, [publicClient, address]);
 
