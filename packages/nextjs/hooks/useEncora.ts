@@ -87,7 +87,7 @@ export function useEncora() {
     const encryptedContent = await encryptText(params.fullContent, symKey);
 
     // 2. Upload encrypted bytes to Pinata IPFS
-    const blob = new Blob([encryptedContent]);
+    const blob = new Blob([encryptedContent.buffer.slice(encryptedContent.byteOffset, encryptedContent.byteOffset + encryptedContent.byteLength)]);
     const file = new File([blob], `encora-${Date.now()}.enc`, { type: "application/octet-stream" });
     const urlRes = await fetch("/api/upload-url");
     const { url: presignedUrl } = await urlRes.json();
